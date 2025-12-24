@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🐸 桃米社區故事地圖 | 極簡圖例版</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <style>
+        @font-face {
+            font-family: 'jf-openhuninn';
+            src: url('https://cdn.jsdelivr.net/gh/justfont/open-huninn-font@1.0/font/jf-openhuninn-1.0.ttf');
+        }
+        :root { --primary-green: #4A6741; --secondary-green: #7ca66e; --text-gray: #444; }
+        
+        body, html { margin: 0; padding: 0; height: 100%; font-family: 'jf-openhuninn', sans-serif; overflow: hidden; }
+        .container { display: flex; height: 100vh; width: 100vw; flex-direction: column; }
+        .top-section { display: flex; flex: 1; overflow: hidden; }
+
+        /* 左側側邊欄 */
+        .story-sidebar { width: 300px; height: 100%; overflow: hidden; background: #fff; box-shadow: 2px 0 10px rgba(0,0,0,0.1); z-index: 10; display: flex; flex-direction: column; }
+        .story-header { padding: 15px; background: var(--primary-green); color: white; flex-shrink: 0; }
+        .story-header h1 { margin: 0; font-size: 1.1rem; }
+        .plan-description { padding: 12px 15px; background: #fdfdfd; border-bottom: 2px solid var(--secondary-green); font-size: 0.8rem; color: var(--text-gray); line-height: 1.5; flex-shrink: 0; }
+        .sidebar-footer { flex: 1; padding: 10px; background: #f9f9f9; display: flex; flex-direction: column; overflow: hidden; }
+        .padlet-box { flex: 1; border-radius: 8px; overflow: hidden; border: 1px solid #ddd; background: #fff; }
+
+        /* 右側地圖區 */
+        #map { flex: 1; height: 100%; position: relative; }
+
+        /* 右側浮動面板 */
+        .map-floating-panel {
+            position: absolute; top: 15px; right: 15px; z-index: 1000;
+            width: 200px; max-height: 80%; background: rgba(255, 255, 255, 0.95);
+            border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+            padding: 15px; display: flex; flex-direction: column; gap: 15px;
+            transition: transform 0.4s ease; border: 1px solid rgba(0,0,0,0.05);
+            overflow-y: auto;
+        }
+        .map-floating-panel.collapsed { transform: translateX(calc(100% + 30px)); }
+        .panel-toggle-btn { position: absolute; top: 15px; right: 15px; z-index: 1001; width: 40px; height: 40px; background: white; border-radius: 8px; display: flex; align-items: center; justify-content: center; cursor: pointer; border: 1px solid #ddd; box-shadow: 0 2px 5px rgba(0,0,0,0.1); font-size: 1.2rem; }
+        
+        .panel-section { border-top: 1px solid #eee; padding-top: 10px; }
+        .panel-title { font-size: 0.85rem; font-weight: bold; color: var(--primary-green); margin-bottom: 8px; display: block; }
+
+        /* 右側景點清單 */
+        #right-spot-list { display: flex; flex-direction: column; gap: 4px; }
+        .right-spot-item { padding: 6px 10px; background: #f8f8f8; border-radius: 4px; font-size: 0.75rem; cursor: pointer; transition: 0.2s; color: #555; }
+        .right-spot-item:hover { background: #f0f4ee; color: var(--primary-green); font-weight: bold; }
+        
+        /* 圖例樣式：僅保留顏色點 */
+        .legend-container { display: flex; flex-direction: column; gap: 6px; }
+        .legend-item { font-size: 0.75rem; display: flex; align-items: center; color: #444; }
+        .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; margin-right: 10px; }
+
+        /* 下方跑馬燈 */
+        .carousel-container { height: 130px; background: #fff; border-top: 3px solid var(--secondary-green); overflow: hidden; display: flex; align-items: center; flex-shrink: 0; }
+        .carousel-track { display: flex; width: max-content; animation: scroll-loop 45s linear infinite; padding: 10px 0; }
+        .carousel-track:hover { animation-play-state: paused; }
+        .carousel-item { flex-shrink: 0; margin: 0 15px; width: 150px; cursor: pointer; text-align: center; }
+        .carousel-item img { width: 100%; height: 85px; object-fit: cover; border-radius: 10px; transition: 0.3s; border: 2px solid transparent; }
+        .carousel-item:hover img { border-color: var(--primary-green); transform: scale(1.05); }
+        .carousel-item span { display: block; font-size: 0.8rem; margin-top: 5px; font-weight: bold; }
+
+        @keyframes scroll-loop { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+
+        .popup-content { width: 200px; text-align: center; }
+        .popup-content img { width: 100%; height: 110px; object-fit: cover; border-radius: 6px; }
+        .nav-link { display: inline-block; padding: 6px 15px; background: var(--primary-green); color: white !important; border-radius: 20px; text-decoration: none; font-size: 0.8rem; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="top-section">
+        <div class="story-sidebar">
+            <div class="story-header">
+                <h1>🐸 南投桃米社區互動地圖。</h1>
+                <p style="margin:0; font-size:0.7rem;">桃米社區位於南投埔里鎮，因 921 地震後積極推動社區再造而聞名，居民以生態保育為核心，結合濕地復育、蝴蝶與蛙類棲地營造及環境教育，逐步形塑出兼顧生活、生產與生態的永續農村樣貌，成為臺灣社區營造與生態旅遊的重要典範。</p>
+            </div>
+            <div class="plan-description">
+                <b>📖 計畫說明：</b><br>
+                本網站透過右側的景點清單與地圖標記，您可以閱讀地景的故事；而透過左側的互動留言板，我們期待您標記當下的觀察、上傳實拍照片，將您的個人感動轉化為桃米動態導覽的一部分，達成『解說、導引與公眾參與』的永續循環。
+            </div>
+            <div class="sidebar-footer">
+                <h3 style="margin: 0 0 10px 0; font-size: 0.9rem; color: var(--primary-green);">💬 參與留言板</h3>
+                <div class="padlet-box">
+                    <iframe src="https://padlet.com/g14757003_1/padlet-yp93nvythk25edzj" style="width:100%;height:100%;border:none;"></iframe>
+                </div>
+            </div>
+        </div>
+
+        <div id="map">
+            <div class="panel-toggle-btn" onclick="togglePanel()">⚙️</div>
+            <div class="map-floating-panel" id="mainPanel">
+                <div style="background: var(--primary-green); color:white; padding: 8px; border-radius: 8px; text-align:center; font-size:0.8rem; cursor:pointer; font-weight:bold;" onclick="locateUser()">🎯 我的位置</div>
+                
+                <div class="panel-section">
+                    <span class="panel-title">🎨 地圖圖例</span>
+                    <div class="legend-container">
+                        <div class="legend-item"><span class="dot" style="background:#2AAD27"></span>自然生態</div>
+                        <div class="legend-item"><span class="dot" style="background:#2A81CB"></span>人文文化</div>
+                        <div class="legend-item"><span class="dot" style="background:#CB8427"></span>商業景點</div>
+                    </div>
+                </div>
+
+                <div class="panel-section">
+                    <span class="panel-title">📍 景點列表</span>
+                    <div id="right-spot-list"></div>
+                </div>
+
+                <div class="panel-section" id="layer-control-container">
+                    <span class="panel-title">🛰️ 地圖圖層</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="carousel-container">
+        <div class="carousel-track" id="carousel-track"></div>
+    </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+    const map = L.map('map', { center: [23.945, 120.928], zoom: 15, zoomControl: false });
+    const googleHybrid = L.tileLayer('https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', { maxZoom: 20, subdomains: ['mt0', 'mt1', 'mt2', 'mt3'] }).addTo(map);
+    const emap = L.tileLayer('https://wmts.nlsc.gov.tw/wmts/EMAP/default/GoogleMapsCompatible/{z}/{y}/{x}', { maxZoom: 19 });
+
+    const icons = {
+        eco: L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34] }),
+        culture: L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-blue.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34] }),
+        business: L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-orange.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34] })
+    };
+
+    const spots = [
+        { name: "紙教堂 Paper Dome", pos: [23.941445566032773, 120.92705905326319], type: "culture", desc: "紙教堂以紙管結構打造，融合建築藝術與人文關懷，象徵震災後重生與社區再生的精神。", img: "https://v1.padlet.pics/3/image.webp?t=c_limit%2Cdpr_1%2Ch_196%2Cw_261&url=https%3A%2F%2Fu1.padletusercontent.com%2Fuploads%2Fpadlet-uploads-usc1%2F4862757000%2Fea0b4cc0b05d0465c335efa3835c46d6%2FLINE_ALBUM_20251214_251223_57.jpg%3Fexpiry_token%3D5WaHZRdGG3LkUVQGy3SZ-zdRtq89aJeottSBaF_Hii8dmxJqYDvE2-MDbblcM-ZrVekXW99RReKkJFIoMoKiow26RVdsr6BNjHlBgbo4-xMWLgVn6Fvzo3kUNG_Pfi9T-HxXEdl25Blx-2ea-ErHqgYsqqozJ1L7mVwU9oBaMALa5As0REK9roqpswq8mSbJZ-69ysqh32GNnyE-QVTLp7fbzxmR2SELfwglE8tJjzSTRrET-S0eVX_mV7Uo-y-R" },
+        { name: "妮娜巧克力城堡", pos: [23.943353798683116, 120.92939104762353], type: "business", desc: "妮娜巧克力夢想城堡是一座座落於桃米村、充滿歐式古堡風情的觀光工廠，提供遊客沉浸式光雕互動與金牌巧克力 DIY 的華麗文化體驗。", img: "https://v1.padlet.pics/3/image.webp?t=c_limit%2Cdpr_1%2Ch_196%2Cw_147&url=https%3A%2F%2Fu1.padletusercontent.com%2Fuploads%2Fpadlet-uploads-usc1%2F4862757000%2F1a9251a024175397f9f59461986aa670%2FLINE_ALBUM_20251214_251224_34.jpg%3Fexpiry_token%3D5WaHZRdGG3LkUVQGy3SZ-zdRtq89aJeottSBaF_Hii8dmxJqYDvE2-MDbblcM-ZrVekXW99RReKkJFIoMoKiow26RVdsr6BNjHlBgbo4-xNgJwM4sVAOYkvUVObXdmsetKr3WhQA873oAsYD5NSR8ILknPlk4WlUjA8klmbmUgAAvfFBu-22EO8mhMqD6nXlf3S4BWafZZ3D3hs0P1OJ-2L6RP1tFChYqvyqXRUwz8uG40OOi4viIaHvFmfwVdmq" },
+        { name: "桃源國小", pos: [23.942098313924028, 120.92590865551838], type: "eco", desc: "南投桃源國小是一所在 911 震災後重建、結合桃米生態村資源，並成功轉型為 KIST 實驗教育的韌性小學。", img: "https://v1.padlet.pics/3/image.webp?t=c_limit%2Cdpr_1%2Ch_196%2Cw_261&url=https%3A%2F%2Fu1.padletusercontent.com%2Fuploads%2Fpadlet-uploads-usc1%2F4862757000%2F2942c33298622bcd4a437064efbfe01a%2FLINE_ALBUM_20251214_251224_76.jpg%3Fexpiry_token%3D5WaHZRdGG3LkUVQGy3SZ-zdRtq89aJeottSBaF_Hii8dmxJqYDvE2-MDbblcM-ZrVekXW99RReKkJFIoMoKiow26RVdsr6BNjHlBgbo4-xM4ATwJAjyXC2_RcUDzmWwkuTN3sI0HIBzOo8z8kB6mHspKNDn7PfxqAt1QqJlqQWKy2BuoE4UsdKFQxMKacc7YhPQMX8RDtwlTKTJImigWGxfX5R-rTa59Y_JNWWHy1GJR4gXz2NfhAuUdrVPfkR9X" },
+        { name: "夢蝶亭.蝶夢亭", pos: [23.940870, 120.926613], type: "business", desc: "夢蝶亭／蝶夢亭為結合自然生態與人文意象的休憩景點，象徵桃米地區以蝴蝶復育為核心的生態保育精神。", img: "https://v1.padlet.pics/3/image.webp?t=c_limit%2Cdpr_1%2Ch_196%2Cw_261&url=https%3A%2F%2Fu1.padletusercontent.com%2Fuploads%2Fpadlet-uploads-usc1%2F4862757000%2F988c67b8e0192aabf24dd46e423ce2bc%2FLINE_ALBUM_20251214_251223_54.jpg%3Fexpiry_token%3D5WaHZRdGG3LkUVQGy3SZ-zdRtq89aJeottSBaF_Hii8dmxJqYDvE2-MDbblcM-ZrVekXW99RReKkJFIoMoKiow26RVdsr6BNjHlBgbo4-xOgmMaHX8Kn7dGTvoQaA4ivEat0xn1N-Md09t_YY-xGylDetkmBgVSfOilSCL5iaBSqd_D8qo6XtK_r5z9aDpniB2lbB2j8wv-7ml0UQqpIPyFHqDL8pFVo-dxethgiMqJx9X7yIKSYWgj4CshFDviu" },
+        { name: "興緣商店(問路店)", pos: [23.942282, 120.928949], type: "culture", desc: "興緣商店（問路店）為在地居民日常聚集與旅人詢問方向的重要據點，兼具生活機能與社區交流功能。", img: "https://v1.padlet.pics/3/image.webp?t=c_limit%2Cdpr_1%2Ch_196%2Cw_147&url=https%3A%2F%2Fu1.padletusercontent.com%2Fuploads%2Fpadlet-uploads-usc1%2F4862757000%2F01ec987e8c4cff2a32da308df488f38b%2FLINE_ALBUM_20251214_251224_39.jpg%3Fexpiry_token%3D5WaHZRdGG3LkUVQGy3SZ-zdRtq89aJeottSBaF_Hii8dmxJqYDvE2-MDbblcM-ZrVekXW99RReKkJFIoMoKiow26RVdsr6BNjHlBgbo4-xMP854w6EiKJwWLLdCB4buweLAPeSUpryVV4r362xgmzTgH5WrYZu3uxLTMqdpeOgYERc3CnerlmXgiHgpMSgpFgKiPejo4qA-B-tpUVaNj5yb1j3SOjDlzYLApT6p8Q7vuC7TlAGMrYduWD6T-7hVH" },
+        { name: "日春養蜂園", pos: [23.942266, 120.928851], type: "business", desc: "日春養蜂園致力於在地生產，提供天然純正蜂蜜與多元蜂產品，傳遞健康與土地共生的理念。", img: "https://v1.padlet.pics/3/image.webp?t=c_limit%2Cdpr_1%2Ch_196%2Cw_147&url=https%3A%2F%2Fu1.padletusercontent.com%2Fuploads%2Fpadlet-uploads-usc1%2F4862757000%2F98a527d7e29772ec027010a7fa69260d%2FLINE_ALBUM_20251214_251224_43.jpg%3Fexpiry_token%3D5WaHZRdGG3LkUVQGy3SZ-zdRtq89aJeottSBaF_Hii8dmxJqYDvE2-MDbblcM-ZrVekXW99RReKkJFIoMoKiow26RVdsr6BNjHlBgbo4-xNKhcovNOrkMCDqumWLbi6G_2TIEMhAvMAQUCAUWlfTX6IcuNvFX8EvOwda-IoBPJiyx2gPimZbQEbVF8RCd6LThVzW1kvIqazpKl8vRANG8Y0V_KZ3rIuT1FWGVQKjqADC1EwZ4ZcRDcht6iT0hjUR" },
+        { name: "埔里福同宮", pos: [23.942621, 120.930764], type: "culture", desc: "埔里福同宮為在地重要信仰中心，供奉地方守護神，承載社區宗教文化與民眾情感凝聚。", img: "https://v1.padlet.pics/3/image.webp?t=c_limit%2Cdpr_1%2Ch_196%2Cw_261&url=https%3A%2F%2Fu1.padletusercontent.com%2Fuploads%2Fpadlet-uploads-usc1%2F4862757000%2F1e7b682fdf99f2fa042993445dc743ac%2FLINE_ALBUM_20251214_251224_25.jpg%3Fexpiry_token%3D5WaHZRdGG3LkUVQGy3SZ-zdRtq89aJeottSBaF_Hii8dmxJqYDvE2-MDbblcM-ZrVekXW99RReKkJFIoMoKiow26RVdsr6BNjHlBgbo4-xMLkit48_1uV9DJ95NVkNc0QZPPBbcGr6EFC4glzgXW7sVIV7bmFsGsGJTghMYVctc4twCBHxlIpbPxF_cTw-nbflBpPlg1ZehVyq6BviT4QNv1kZtLxGwEK1Ly4-ktu5EWRv4w7MVqfiweWInrnZef" },
+        { name: "桃米集會所", pos: [23.942520, 120.930185], type: "culture", desc: "桃米集會所為社區居民集會、討論公共事務與舉辦活動的重要空間，凝聚地方情感與社區向心力。", img: "https://v1.padlet.pics/3/image.webp?t=c_limit%2Cdpr_1%2Ch_196%2Cw_261&url=https%3A%2F%2Fu1.padletusercontent.com%2Fuploads%2Fpadlet-uploads-usc1%2F4862757000%2F752505df47e3e33c6e9ee52f87ea9c94%2FLINE_ALBUM_20251214_251224_16.jpg%3Fexpiry_token%3D5WaHZRdGG3LkUVQGy3SZ-zdRtq89aJeottSBaF_Hii8dmxJqYDvE2-MDbblcM-ZrVekXW99RReKkJFIoMoKiow26RVdsr6BNjHlBgbo4-xMIqgYN8WMPmJ-wdo-cjuIIF4GztKsI5uVJGw2DX4mthxh3qmYn4DLzURmfm95tITp6SHMCIhIGb1vtyHYxuu3_DZpqbL3XH3d5YyC-fVBCijKtN4pKqltAkqHwpObVOt5Xz1Da1MvOoILe6Vsxq4eD" },
+        { name: "埔里桃米 綠舍民宿", pos: [23.942567719345284, 120.9269417224301], type: "eco", desc: "埔里桃米綠舍民宿以家污型廢水處理系統打造生態池，透過自然淨化機制實踐環保理念，展現永續生活的在地實踐。", img: "https://v1.padlet.pics/3/image.webp?t=c_limit%2Cdpr_1%2Ch_196%2Cw_110&url=https%3A%2F%2Fu1.padletusercontent.com%2Fuploads%2Fpadlet-uploads-usc1%2F4862757000%2Ff9b0461cc9aeffaa05a889314860e847%2FLINE_ALBUM_20251214_251224_68.jpg%3Fexpiry_token%3D5WaHZRdGG3LkUVQGy3SZ-zdRtq89aJeottSBaF_Hii8dmxJqYDvE2-MDbblcM-ZrVekXW99RReKkJFIoMoKiow26RVdsr6BNjHlBgbo4-xPzWOgEiO8W4VBQJZr3XyhnMT-Mgc5U5A1l8zr3NSjNsxpNgBNc1dHQMEN0CA-1pDKxN8xVy0lFtsl6-qL9CIE3E9K3mMLbI6sRRfO-2rkViAQjONUibD5v1fFWMMswQPZfOv_NTSaT1PMtiubeVgY4" },
+        { name: "田份仔生態池", pos: [23.940732336049248, 120.92688592346762], type: "eco", desc: "田份仔生態池透過自然工法營造多樣水域棲地，兼具滯洪、淨水與生態教育功能，是社區重要的生態節點。", img: "https://v1.padlet.pics/3/image.webp?t=c_limit%2Cdpr_1%2Ch_370%2Cw_278&url=https%3A%2F%2Fu1.padletusercontent.com%2Fuploads%2Fpadlet-uploads-usc1%2F4862757000%2F87e9a542650b191fed1954b438574b97%2FLINE_ALBUM_20251214_251224_105.jpg%3Fexpiry_token%3D5WaHZRdGG3LkUVQGy3SZ-zdRtq89aJeottSBaF_Hii8dmxJqYDvE2-MDbblcM-ZrVekXW99RReKkJFIoMoKiow26RVdsr6BNjHlBgbo4-xPm8BM9sEd6aeEuXS2dOujB-5IixMVt_aS3aa_4ikI76PqCxz9ze8zYOC_yn4J0S8wiCMvVHWSY1q51R6Qjh3IxLSm_wsl3kgXxNEkJDgNtKczaLTs5VQV8dRFBad7jAWIYigCzpBx-I-K2c6IZ31XX" },
+        { name: "桃米坑溪生態步道", pos: [23.94311649793645, 120.92884594838682], type: "eco", desc: "桃米坑溪生態步道沿溪而行，結合自然景觀與生態解說，提供民眾親近水域、認識桃米生態特色的友善步行空間。", img: "https://v1.padlet.pics/3/image.webp?t=c_limit%2Cdpr_1%2Ch_196%2Cw_261&url=https%3A%2F%2Fu1.padletusercontent.com%2Fuploads%2Fpadlet-uploads-usc1%2F4862757000%2Ff65a1f81db0303dc44be72ed3a5fe9f7%2FLINE_ALBUM_20251214_251224_11.jpg%3Fexpiry_token%3D5WaHZRdGG3LkUVQGy3SZ-zdRtq89aJeottSBaF_Hii8dmxJqYDvE2-MDbblcM-ZrVekXW99RReKkJFIoMoKiow26RVdsr6BNjHlBgbo4-xML_RmhC3_hXT4kXstye_qITCnTdtJNlb08u8BL0Bzjq8xSc4exgLqkxHC0ZIZ4BqNMO8p7DBxkIFROrz2rjs3jxaKcjhkW7pUZnnc5gkIKDGg-N23djXJ00qenG5IwUu8_Mv66C-bnpEy3DzdGkGPx" }
+    ];
+
+    const markers = [];
+    const rightList = document.getElementById('right-spot-list');
+    const carouselTrack = document.getElementById('carousel-track');
+
+    spots.forEach((spot, idx) => {
+        const marker = L.marker(spot.pos, { icon: icons[spot.type] }).addTo(map);
+        marker.bindPopup(`<div class="popup-content"><img src="${spot.img}"><h4>${spot.name}</h4><p style="font-size:0.7rem;">${spot.desc}</p><a href="https://www.google.com/maps/dir/?api=1&destination=${spot.pos[0]},${spot.pos[1]}" target="_blank" class="nav-link">🧭 導航</a></div>`);
+        markers.push(marker);
+
+        const listItem = document.createElement('div');
+        listItem.className = 'right-spot-item';
+        listItem.innerHTML = `${spot.name}`;
+        listItem.onclick = () => { map.flyTo(spot.pos, 17); setTimeout(() => marker.openPopup(), 1200); };
+        rightList.appendChild(listItem);
+
+        const cItem = document.createElement('div');
+        cItem.className = 'carousel-item';
+        cItem.innerHTML = `<img src="${spot.img}"><span>${spot.name}</span>`;
+        carouselTrack.appendChild(cItem);
+    });
+
+    const originalContent = carouselTrack.innerHTML;
+    carouselTrack.innerHTML = originalContent + originalContent;
+    const allCarouselItems = carouselTrack.querySelectorAll('.carousel-item');
+    allCarouselItems.forEach((item, index) => {
+        const sIndex = index % spots.length;
+        item.onclick = () => {
+            map.flyTo(spots[sIndex].pos, 17);
+            setTimeout(() => markers[sIndex].openPopup(), 1200);
+        };
+    });
+
+    const layerControl = L.control.layers({ "🛰️ 衛星": googleHybrid, "🗺️ 電子": emap }, null, { collapsed: false }).addTo(map);
+    document.getElementById('layer-control-container').appendChild(layerControl.getContainer());
+
+    function togglePanel() { document.getElementById('mainPanel').classList.toggle('collapsed'); }
+    function locateUser() { map.locate({setView: true, maxZoom: 16}); }
+    map.on('locationfound', (e) => { L.marker(e.latlng).addTo(map).bindPopup("📍 您在這裡").openPopup(); });
+</script>
+</body>
+</html>
