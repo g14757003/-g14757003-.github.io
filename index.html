@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🐸 桃米社區故事地圖 | 極簡圖例版</title>
+    <title>🐸 桃米社區故事地圖</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
     <style>
         @font-face {
@@ -186,4 +186,5 @@
     map.on('locationfound', (e) => { L.marker(e.latlng).addTo(map).bindPopup("📍 您在這裡").openPopup(); });
 </script>
 </body>
+
 </html>
